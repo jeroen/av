@@ -5,7 +5,8 @@
 \title{Create Video}
 \usage{
 av_encode_video(input, output = "video.mp4", framerate = 1,
-  filter = "null", codec = "libx264", progress = TRUE)
+  filter = "null", codec = "libx264", audio = NULL,
+  progress = TRUE)
 }
 \arguments{
 \item{input}{a vector with images such as png files.}
@@ -20,6 +21,8 @@ container format such as \code{mp4}, \code{mkv}, \code{mov}, or \code{flv}.}
 \item{codec}{name of the video codec as listed in \link{av_encoders}. The
 default encodes into h264 which has excellent compression and works out of the box on
 all \href{https://caniuse.com/#search=h264}{modern browsers} and operating systems.}
+
+\item{audio}{input file with sound}
 
 \item{progress}{show a progress bar counting processed input images}
 }
