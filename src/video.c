@@ -73,11 +73,13 @@ static input_container *open_audio_file(const char *filename){
   Rf_error("No suitable audio stream found in %s", filename);
 }
 
-int recode_audio_stream(input_container * audio, filter_container *filter, output_container * output){
+int recode_audio_stream(input_container * audio, filter_container *filter, output_container * output, int64_t max_pts){
   AVPacket *pkt = av_packet_alloc();
-  while(1) {
+  Rprintf("Adding audio: ");
+  while(av_compare_ts(output->audio_stream->cur_dts, output->audio_codec_ctx->time_base,
+                      output->video_stream->cur_dts, output->video_stream->time_base) < 0) {
     int ret = av_read_frame(audio->fmt_ctx, pkt);
-    if(ret == AVERROR_EOF){
+    if(ret == AVERROR_EOF || max_pts < 0){
       bail_if(avcodec_send_packet(audio->codec_ctx, NULL), "avcodec_send_packet (flush)");
     } else {
       bail_if(ret, "av_read_frame");
@@ -116,22 +118,20 @@ int recode_audio_stream(input_container * audio, filter_container *filter, outpu
           if (ret == AVERROR(EAGAIN))
             break;
           if (ret == AVERROR_EOF){
-            av_log(NULL, AV_LOG_INFO, " done!\n");
+            av_log(NULL, AV_LOG_INFO, " audio stream complete!\n");
             return AVERROR_EOF;
           }
           pkt->stream_index = output->audio_stream->index;
           av_packet_rescale_ts(pkt, output->audio_codec_ctx->time_base, output->audio_stream->time_base);
           bail_if(av_interleaved_write_frame(output->fmt_ctx, pkt), "av_interleaved_write_frame");
           av_packet_unref(pkt);
+          Rprintf(".");
         }
       }
     }
-    /* Test if we are in sync with the video stream yet */
-    if(output->audio_stream->cur_dts > output->video_stream->cur_dts){
-      Rprintf("Cur dts: %d (audio), %d (video)\n", output->audio_stream->cur_dts, output->video_stream->cur_dts);
-      return 0;
-    }
   }
+  Rprintf(" (synced audio until: %d)\n", output->audio_stream->cur_dts);
+  return 0;
 }
 
 static output_container *open_output_file(const char *filename, int width, int height, AVCodec *codec, int len, AVCodecContext *audio_input){
@@ -177,8 +177,8 @@ static output_container *open_output_file(const char *filename, int width, int h
 
   /* Start audio stream */
   if(audio_input != NULL){
-    AVCodec *audio_codec = avcodec_find_encoder_by_name("libmp3lame");
-    bail_if_null(audio_codec, "avcodec_find_encoder_by_name (libmp3lame)");
+    AVCodec *audio_codec = avcodec_find_encoder_by_name("aac");
+    bail_if_null(audio_codec, "avcodec_find_encoder_by_name (aac)");
     AVCodecContext *audio_ctx = avcodec_alloc_context3(audio_codec);
     bail_if_null(audio_ctx, "avcodec_alloc_context3");
     audio_ctx->sample_rate = audio_input->sample_rate;
@@ -295,7 +295,7 @@ static filter_container *open_audio_filter(AVCodecContext *dec_ctx){
   bail_if(avfilter_graph_create_filter(&buffersink_ctx, avfilter_get_by_name("abuffersink"), "out",
                                        NULL, NULL, filter_graph), "avfilter_graph_create_filter (output)");
 
-  AVCodec *audio_codec = avcodec_find_encoder_by_name("libmp3lame");
+  AVCodec *audio_codec = avcodec_find_encoder_by_name("aac");
   enum AVSampleFormat fmt = audio_codec->sample_fmts[0];
   bail_if(av_opt_set_bin(buffersink_ctx, "sample_fmts",
                          (uint8_t*)&fmt, sizeof(fmt),
@@ -446,21 +446,21 @@ SEXP R_encode_video(SEXP in_files, SEXP out_file, SEXP framerate, SEXP filterstr
         bail_if(ret, "avcodec_receive_packet");
         //pkt->duration = duration; <-- may have changed by the filter!
         pkt->stream_index = outfile->video_stream->index;
+        Rprintf("Adding image with container-pts: %d\n", pkt->pts);
+        if(has_more && recode_audio_stream(audio_input, audio_filter, outfile, pkt->pts) == AVERROR_EOF)
+          has_more = 0;
         av_packet_rescale_ts(pkt, outfile->video_codec_ctx->time_base, outfile->video_stream->time_base);
         bail_if(av_interleaved_write_frame(outfile->fmt_ctx, pkt), "av_interleaved_write_frame");
         av_packet_unref(pkt);
-
-        if(has_more && recode_audio_stream(audio_input, audio_filter, outfile) == AVERROR_EOF)
-          has_more = 0;
       }
     }
-    av_log(NULL, AV_LOG_INFO, "\rFrame %d (%d%%)", i+1, (i+1) * 100 / Rf_length(in_files));
+    //av_log(NULL, AV_LOG_INFO, "\rFrame %d (%d%%)", i+1, (i+1) * 100 / Rf_length(in_files));
   }
   Rf_warning("Did not reach EOF, video may be incomplete");
 done:
   if(has_audio){
     if(has_more)
-      recode_audio_stream(audio_input, audio_filter, outfile);
+      recode_audio_stream(audio_input, audio_filter, outfile, -1);
     close_input_file(audio_input);
     close_filter_container(audio_filter);
   }
