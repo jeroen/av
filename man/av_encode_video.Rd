@@ -7,7 +7,7 @@
 \title{Video Encoding}
 \usage{
 av_encode_video(input, output = "video.mp4", framerate = 24,
-  filter = "null", codec = NULL, verbose = TRUE)
+  filter = "null", codec = NULL, audio = NULL, verbose = TRUE)
 }
 \arguments{
 \item{input}{a vector with images such as png files. All input files should have
@@ -25,6 +25,8 @@ as the \code{-vf} argument in the \code{ffmpeg} command line utility.}
 
 \item{codec}{name of the video codec as listed in \link{av_encoders}. The
 default is \code{libx264} for most formats, which usually the best choice.}
+
+\item{audio}{optional file with sounds to add to the video}
 
 \item{verbose}{emit some output and a progress meter counting processed images. Must
 be \code{TRUE} or \code{FALSE} or an integer with a valid \href{av_log_level}{log_level}.}

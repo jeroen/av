@@ -30,10 +30,11 @@
 #' frames.
 #' @param codec name of the video codec as listed in [av_encoders][av_encoders]. The
 #' default is `libx264` for most formats, which usually the best choice.
+#' @param audio optional file with sounds to add to the video
 #' @param verbose emit some output and a progress meter counting processed images. Must
 #' be `TRUE` or `FALSE` or an integer with a valid [log_level](av_log_level).
 av_encode_video <- function(input, output = "video.mp4", framerate = 24, filter = "null",
-                            codec = NULL, verbose = TRUE){
+                            codec = NULL, audio = NULL, verbose = TRUE){
   stopifnot(length(input) > 0)
   input <- normalizePath(input, mustWork = TRUE)
   stopifnot(length(output) == 1)
@@ -43,10 +44,12 @@ av_encode_video <- function(input, output = "video.mp4", framerate = 24, filter 
   framerate <- as.numeric(framerate)
   filter <- as.character(filter)
   codec <- as.character(codec)
+  if(length(audio))
+    audio <- normalizePath(audio, mustWork = TRUE)
   if(is.logical(verbose))
     verbose <- ifelse(isTRUE(verbose), 32, 16)
   old_log_level <- av_log_level()
   on.exit(av_log_level(old_log_level))
   av_log_level(verbose)
-  .Call(R_encode_video, input, output, framerate, filter, codec)
+  .Call(R_encode_video, input, output, framerate, filter, codec, audio)
 }
