@@ -1,3 +1,6 @@
+0.6.0
+  - Remove accidental NA values from read_audio_bin()
+
 0.5.1
   - Fix bug on Catalina that fails loading av if base packages aren't attached. (#29)
   - Workaround for false positives in CleanupReporter

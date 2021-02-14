@@ -335,8 +335,13 @@ static SEXP run_bin(spectrum_container *output){
     }
     R_CheckUserInterrupt();
   }
-  SEXP out = Rf_allocVector(INTSXP, total_samples * channels);
+  R_xlen_t outlen = total_samples * channels;
+  SEXP out = Rf_allocVector(INTSXP, outlen);
   memcpy(INTEGER(out), output->dst_int, total_samples * samplesize);
+  for(int *ptr = INTEGER(out); ptr < INTEGER(out) + outlen; ptr++){
+    if(*ptr == NA_INTEGER)
+      *ptr = NA_INTEGER + 1;
+  }
   return out;
 }
 
